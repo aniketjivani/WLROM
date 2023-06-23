@@ -316,6 +316,12 @@ for itr in range(1, niters + 1):
     end = time.time()
 
 # %%
+# to check
+# what is the minimum error we go to in spiral ode example? (also try that in Julia and see
+# the minimum
+# set up viz for plotting decoded image data (decode -> reshape -> plot)
+# set up viz for plotting on "test" times (extrapolation)
+# finally see what to do for global learning (bayesian opinf and gresnet etc.)
 
 # %% [markdown]
 # Try the same example but with prior learnt OpInf model.
