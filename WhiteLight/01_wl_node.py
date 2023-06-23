@@ -173,17 +173,28 @@ batch_size = 10
 print("Data size = ", data_size, " Batch time = ", batch_time, " Batch size = ", batch_size)
 
 # %%
-t = torch.tensor(t_train).to(device)
 
 # %%
-true_y0 = torch.from_numpy(reduced_states[:, 0])
+t = torch.tensor(np.float32(t_train)).to(device)
+
+# %%
+t.dtype
+
+# %%
+true_y0 = torch.from_numpy(np.float32(reduced_states[:, 0]))
 true_y0 = true_y0.reshape((1, len(true_y0))).to(device)
 true_y0.shape
 
 # %%
-yreduced = reduced_states.T
+true_y0.dtype
+
+# %%
+yreduced = np.float32(reduced_states.T)
 true_y = torch.from_numpy(np.expand_dims(yreduced, axis=1)).to(device)
 true_y.shape
+
+# %%
+true_y.dtype
 
 
 # %% [markdown]
@@ -193,7 +204,6 @@ true_y.shape
 def get_batch():
     s = torch.from_numpy(np.random.choice(np.arange(data_size - batch_time, dtype=np.int64),
                                           batch_size, replace=False))
-    print(s)
     batch_y0 = true_y[s]
     batch_t = t[:batch_time]  # (T)
     batch_y = torch.stack([true_y[s + i] for i in range(batch_time)], dim=0)  # (T, M, D)
@@ -202,6 +212,9 @@ def get_batch():
 
 # %%
 by0, bt, by = get_batch()
+
+# %%
+by0.shape, bt.shape, by.shape
 
 
 # %%
@@ -235,9 +248,6 @@ class ODEFunc(nn.Module):
             nn.Tanh(),
             nn.Linear(50, 32),
         )
-        
-        
-        
         
 #         self.net2 = nn.Sequential(
 #             nn.Linear(32, 50),
@@ -274,7 +284,11 @@ optimizer = optim.RMSprop(func.parameters(), lr=1e-3)
 end = time.time()
 
 # %%
-niters = 100
+niters = 500
+test_freq = 10
+
+# %%
+func
 
 # %%
 time_meter = RunningAverageMeter(0.97)
@@ -291,12 +305,12 @@ for itr in range(1, niters + 1):
     time_meter.update(time.time() - end)
     loss_meter.update(loss.item())
 
-    if itr % args.test_freq == 0:
+    if itr % test_freq == 0:
         with torch.no_grad():
             pred_y = odeint(func, true_y0, t)
             loss = torch.mean(torch.abs(pred_y - true_y))
             print('Iter {:04d} | Total Loss {:.6f}'.format(itr, loss.item()))
-            visualize(true_y, pred_y, func, ii)
+#             visualize(true_y, pred_y, func, ii)
             ii += 1
 
     end = time.time()
