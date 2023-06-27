@@ -72,7 +72,8 @@ plt.rc("font",
        size=10
        )
 plt.rc("legend", edgecolor="none", frameon=True)
-plt.rc("text", usetex=True)
+plt.rc("text", usetex=False)
+# plt.rc("text", usetex=True)
 
 # %% [markdown]
 # ### Setup training and testing data
@@ -139,6 +140,7 @@ X_test = X[:, :, test_sim]
 X_train_test_ttrain = X[:, :(nTrainTime + 1), :]
 
 # %%
+X_train_ttrain.shape
 
 # %%
 rom_1 = op.ContinuousOpInfROM(modelform="AH")
@@ -173,8 +175,6 @@ batch_size = 10
 print("Data size = ", data_size, " Batch time = ", batch_time, " Batch size = ", batch_size)
 
 # %%
-
-# %%
 t = torch.tensor(np.float32(t_train)).to(device)
 
 # %%
@@ -189,6 +189,9 @@ true_y0.shape
 true_y0.dtype
 
 # %%
+reduced_states.shape
+
+# %%
 yreduced = np.float32(reduced_states.T)
 true_y = torch.from_numpy(np.expand_dims(yreduced, axis=1)).to(device)
 true_y.shape
@@ -199,6 +202,9 @@ true_y.dtype
 
 # %% [markdown]
 # Need functions for getting batch, getting true x, getting ODE func - where we run the "loss" metric compared to the true simulation.
+
+# %% [markdown]
+# The batch is taking IC as values at different times in the training set, and the solution as the values following the IC upto some predefined batch size for time.
 
 # %%
 def get_batch():
@@ -212,6 +218,9 @@ def get_batch():
 
 # %%
 by0, bt, by = get_batch()
+
+# %%
+batch_time
 
 # %%
 by0.shape, bt.shape, by.shape
@@ -284,8 +293,8 @@ optimizer = optim.RMSprop(func.parameters(), lr=1e-3)
 end = time.time()
 
 # %%
-niters = 500
-test_freq = 10
+niters = 2000
+test_freq = 5
 
 # %%
 func
@@ -314,6 +323,65 @@ for itr in range(1, niters + 1):
             ii += 1
 
     end = time.time()
+
+# %% [markdown]
+# Effectively, we have two things to check over here:
+#
+# 1. What is the error within the training set, if we provide initial condition y0?
+#
+# 2. What is the error on the held out part of the data with the same IC?
+#
+# We could just plot the 2D images and check this qualitatively / with RMSE, with the caveat that RMSE is not really the metric we want to be optimizing for. Also is evaluating error between reduced _as opposed to_ full state appropriate?
+
+# %% [markdown]
+# If we tried everything with train times in first sim  i.e. `true_y` was derived from reduced states constructed off `X_train_ttrain[:, :, 0]` then `X_train_ttrain[:, :, 0]` is basically decoded shape for the `true_y`.
+
+# %% [markdown]
+# Predicted `y` i.e. `pred_y` needs to be decoded.
+
+# %%
+with torch.no_grad():
+    pred_y = odeint(func, true_y0, t)
+
+# %%
+pred_y.shape
+
+# %%
+pred_y_np = pred_y.cpu().numpy()[:, 0, :].T
+
+# %%
+pred_y_decoded = basis_1.decode(pred_y_np)
+
+# %%
+true_y_decoded = X_train_ttrain[:, :, 0]
+
+# %%
+pred_y_decoded.shape
+
+# %% [markdown]
+# visualization for if we are able to replicate training properly.
+
+# %%
+64 * 256
+
+# %%
+# def visualize():
+fig, ax = plt.subplots(1, 2, figsize=(10, 6))
+axs = ax.ravel()
+im0 = axs[0].imshow(true_y_decoded[:, 40].reshape(64, 256),
+            origin="lower",
+            cmap=lc3_reg)
+axs[0].set_title("True")
+fig.colorbar(im0, fraction=0.046 * 1/3, pad=0.04)
+
+im1 = axs[1].imshow(pred_y_decoded[:, 40].reshape(64, 256),
+                   origin="lower",
+                   cmap=lc3_reg)
+axs[1].set_title("Predicted")
+fig.colorbar(im1, fraction=0.046 * 1/3, pad=0.04)
+
+# %% [markdown]
+#
 
 # %%
 # to check
