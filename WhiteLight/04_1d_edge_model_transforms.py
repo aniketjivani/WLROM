@@ -280,8 +280,8 @@ x_data = theta_all[order]
 # %%
 plt.plot(np.diff(r2_all))
 
-# %%
-We really need to calculate th
+# %% [markdown]
+# We really need to calculate radius instead of pixel values. Its probably not a linear map, that's another reason why we may be going wrong!!!!
 
 # %%
 theta_interp = np.interp(r2_exact, y_data, x_data)
@@ -366,7 +366,84 @@ theta_direction = np.sign(np.diff(x_data))
 # **Approach 2**: Nearest neighbours? Find closest matching $(r/t)$ values in edge at next timestep to the previous, and simply use those so that interpolation doesn't have to be optimized (interpolation goes the loong and possibly too complicated? way round trying to find the right $\theta$).
 
 # %%
-r_by_t_calc = 
+r_by_t_calc = ed31[tMinIdx + 1, 0:-1:2]/(tMin + 2)
+
+# %%
+plt.plot(r_by_t_ref, label="r by t 1")
+plt.plot(r_by_t_calc, label="r by t 2")
+plt.legend()
+
+# %% [markdown]
+# Also try another scaling.
+
+# %%
+r_by_sqrt_t_ref = ed31[tMinIdx, 0:-1:2]/np.sqrt(tMin)
+r_by_sqrt_t_calc = ed31[tMinIdx + 1, 0:-1:2]/np.sqrt(tMin + 2)
+
+# %%
+plt.plot(r_by_sqrt_t_ref, label="r by sqrt t 1")
+plt.plot(r_by_sqrt_t_calc, label="r by sqrt t 2")
+plt.legend()
+
+
+# %%
+
+# %% [markdown]
+# Check how to convert pixel values into radius correctly. 
+#
+# 1. Paste the edge to cartesian conversion function here. Check if the results match up to Y labels we have been using in multiple edge plots
+
+# %% [markdown]
+# For angles (from Hongfan):
+# ```
+# Event: Start, End(x out of 512)
+# CR2154: 50, 450
+# CR2161: 160,360
+# CR2192: 90, 275So the actual angle(suppose (0,1)i s 0 and (1,0) is 90 and so forth) will be 360/512 * x + 1.2 * 180 - 360. Note that, 1.2pi is coming from function Normalization, in which I start at x+1.2pi counterclockwise.Here's an example, for CR2161, the actual angle will be seq(0,360, by = 360/512)[160:359]+1.2*180 - 360 which is equal to [-32, 107]
+# ```
+
+# %%
+def Polar_to_Cartesian(edge, start_angle, end_angle, height, width, circles_disk, circles_scope):
+    theta = np.arange(0, 2 * np.pi, 2 * np.pi / width)[start_angle:end_angle]
+    # Coordinates of disk and telescope center
+    circle_x = circles_disk[0]
+    circle_y = circles_disk[1]
+    # Radius of disk and telescope
+    r_disk = circles_disk[2]
+    r_scope = circles_scope[2]
+    Xp = circle_x + r_disk * np.cos(theta + 1.2 * np.pi)
+    Yp = circle_y + r_disk * np.sin(theta + 1.2 * np.pi)
+    Xi = circle_x + r_scope * np.cos(theta + 1.2 * np.pi)
+    Yi = circle_y + r_scope * np.sin(theta + 1.2 * np.pi)
+    r = edge / height
+    return r + 4.05
+# Aniket: Lightly modifying the above to return r instead of X and Y
+#     X = Xp + ( Xi - Xp ) * r
+#     Y = Yp + ( Yi - Yp ) * r
+#     return (X,Y)
+
+
+# %%
+height_flattened
+
+# %%
+np.arange(0, height_flattened, step=21)
+
+# %%
+Polar_to_Cartesian(np.arange(0, height_flattened, step=21),
+                   start_angle=160,
+                   end_angle=360,
+                   height=128,
+                   width=512,
+                   circles_disk=(149, 149, 19),
+                   circles_scope=(149, 149, 110))
+
+# %% [markdown]
+# Nope this is not correct.
+
+# %%
+
+# %%
 
 # %%
 
