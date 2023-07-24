@@ -96,6 +96,9 @@ theta_s_2154, theta_e_2154 = np.linspace(0, 360, 512)[50] + 1.2 * 180 - 360, np.
 print("Range of angles for CR2161: {} {}".format(theta_s_2154, theta_e_2154))
 
 # %%
+np.linspace(0, 360, 512)[57] + 1.2 * 180 - 360, np.linspace(0, 360, 512)[442] + 1.2 * 180 - 360
+
+# %%
 height_flattened=128
 
 # %%
@@ -204,7 +207,6 @@ plt.plot(r_by_sqrt_t_ref, label="r by sqrt t 1")
 plt.plot(r_by_sqrt_t_calc, label="r by sqrt t 2")
 plt.legend()
 
-
 # %%
 # convert pixel values to Cartesian, then get correct R and theta values from there. Show on a polar plot!
 
@@ -218,6 +220,11 @@ plt.legend()
 # CR2192: 90, 275
 #
 # So the actual angle(suppose (0,1)i s 0 and (1,0) is 90 and so forth) will be 360/512 * x + 1.2 * 180 - 360. Note that, 1.2pi is coming from function Normalization, in which I start at x+1.2pi counterclockwise.Here's an example, for CR2161, the actual angle will be seq(0,360, by = 360/512)[160:359]+1.2*180 - 360 which is equal to [-32, 107]
+
+# %%
+circles_disk_obs = (518, 532, 67)
+circles_scope_obs = (518, 532, 384)
+
 
 # %%
 def Polar_to_Cartesian(edge, start_angle, end_angle, height, width, circles_disk, circles_scope):
@@ -255,6 +262,8 @@ X2, Y2 = Polar_to_Cartesian(edge2,
                    width=512, 
                    circles_disk=(149,149,19), 
                    circles_scope=(149,149,110))
+
+# %%
 
 # %%
 X1_norm, Y1_norm = (64 * (X1/300) - 32), (64 * (Y1/300) - 32)
@@ -322,7 +331,81 @@ def getRValues(edge_data_matrix, simIdx=0, minStartIdx=20):
 
 
 # %%
+def getRValuesObs(edge_data_matrix, cd, co, sa, ea):
+    
+    
+    nTimes, nThetas = edge_data_matrix.shape[0], edge_data_matrix.shape[1]
+    
+    r_vals = np.zeros((nTimes, nThetas))
+    theta_vals = np.zeros((nTimes, nThetas))
+    
+    for i in range(nTimes):
+        xi, yi   = Polar_to_Cartesian(edge_data_matrix[i, :], 
+                   start_angle = sa,
+                   end_angle = ea,
+                   height=128, 
+                   width=512, 
+                   circles_disk=cd, 
+                   circles_scope=co)
+        
+        xi_norm, yi_norm = 64 * (xi/1024) - 32, 64 * (yi/1024) - 32
+        theta_vals[i, :] = np.arctan2(yi_norm, xi_norm)
+    
+        r_vals[i, :] = np.sqrt(xi_norm**2 + yi_norm**2)
+    
+    return r_vals, theta_vals
+
+# %%
+obs_cr2154_edge = np.load("./edge_data/CR2154_obs_stacked_edge.npy")
+
+# %%
+r_obs_2154, t_obs_2154 = getRValuesObs(obs_cr2154_edge[:, 7:-7], circles_disk_obs, circles_scope_obs, 57, 443)
+
+# %%
+t_obs_2154.shape
+
+# %%
 r_vals_s31, theta_vals_s31 = getRValues(ed_2161, simIdx=0, minStartIdx = 20)
+
+# %%
+r_vals_s51, theta_vals_s51 = getRValues(ed_2161, simIdx=20, minStartIdx = 20)
+
+# %%
+r_obs_2154.shape
+
+# %%
+t_obs_2154 * 180 / np.pi
+
+# %%
+fig = plt.figure(figsize=(12, 6))
+ax1 = plt.subplot(121)
+ax2 = plt.subplot(122, projection='polar')
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+theta_obs = np.linspace(-103, 161, 386)
+
+for i in range(11):
+    ax1.plot(theta_obs, r_obs_2154[i, :], color=next(color), label=fr"$u(t_{{i}})$")
+
+ax1.set_xlabel(r"$θ (deg)$")
+ax1.set_ylabel(r"$r_{edge}(t)$")
+ax1.set_xlim(-103, 161)
+ax1.set_ylim(4.05, 24)
+ax1.legend(loc=(1.05, .05))
+ax1.set_title("Obs 2154")
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+
+for i in range(11):
+    ax2.plot(t_obs_2154[i, :], r_obs_2154[i, :], color=next(color), label=fr"$u(t_{{i}})$")
+
+ax2.tick_params(axis='both', which='major', labelsize=10)
+ax2.set_rmax(24)
+ax2.grid(True)
+
+fig.tight_layout()
 
 # %%
 fig = plt.figure(figsize=(12, 6))
@@ -344,12 +427,49 @@ ax1.set_ylabel(r"$r_{edge}(t)$")
 ax1.set_xlim(-32, 107)
 ax1.set_ylim(4.05, 24)
 ax1.legend(loc=(1.05, .05))
+ax1.set_title("Sim 031")
 
 color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
 
 
 for i, j in enumerate(sampleTimeIdx):
     ax2.plot(theta * np.pi/180, r_vals_s31[j, :], color=next(color), label=fr"$u(t_{{{sampleTimesToPlot[i]}}})$")
+
+ax2.tick_params(axis='both', which='major', labelsize=10)
+ax2.set_rmax(24)
+ax2.grid(True)
+
+
+fig.tight_layout()
+
+# %%
+fig = plt.figure(figsize=(12, 6))
+ax1 = plt.subplot(121)
+ax2 = plt.subplot(122, projection='polar')
+
+sampleTimeIdx = [0, 2, 4, 8, 12, 20, 40, 50, 60, 66, 69]
+sampleTimesToPlot = actualTimes[20:][sampleTimeIdx]
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+theta = np.linspace(-32, 107, 200)
+
+for i, j in enumerate(sampleTimeIdx):
+    ax1.plot(theta, r_vals_s51[j, :], color=next(color), label=fr"$u(t_{{{sampleTimesToPlot[i]}}})$")
+
+ax1.set_xlabel(r"$θ (deg)$")
+ax1.set_ylabel(r"$r_{edge}(t)$")
+ax1.set_xlim(-32, 107)
+ax1.set_ylim(4.05, 24)
+ax1.legend(loc=(1.05, .05))
+ax1.set_title("Sim 051")
+
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+
+for i, j in enumerate(sampleTimeIdx):
+    ax2.plot(theta * np.pi/180, r_vals_s51[j, :], color=next(color), label=fr"$u(t_{{{sampleTimesToPlot[i]}}})$")
 
 
 ax2.tick_params(axis='both', which='major', labelsize=10)
@@ -363,19 +483,298 @@ fig.tight_layout()
 # Visualize matching of rescaled points with Dynamic Time Warping and see if we can get a unique correspondence?
 
 # %%
+plt.plot(theta1 * 180 / np.pi, R1, label="Edge 1")
+plt.plot(theta1 * 180 / np.pi, R2, label="Edge 2")
+
+R1_ds = R1[0:-1:2]
+R2_ds = R2[0:-1:2]
+
+for i, j in enumerate(theta1[0:-1:2]):
+    plt.plot([j * 180 / np.pi, j * 180 / np.pi], [R1_ds[i], R2_ds[i]], color='k', alpha=.2, zorder=0)
+plt.xlabel("θ")
+plt.ylabel("R")
+plt.legend()
 
 # %%
+# more regular
+plt.plot(theta1 * 180 / np.pi, R1, label="Edge 1")
+plt.plot(theta1 * 180 / np.pi, R2, label="Edge 2")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[2, :], label="Edge 3")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[3, :], label="Edge 4")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[4, :], label="Edge 5")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[5, :], label="Edge 6")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[6, :], label="Edge 7")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[7, :], label="Edge 8")
+
+plt.xlabel("θ")
+plt.ylabel("R")
+plt.legend()
+
+# %% [markdown]
+# Rescaled edges:
 
 # %%
+plt.plot(theta1 * 180 / np.pi, R1/42, label="Edge 1")
+plt.plot(theta1 * 180 / np.pi, R2/44, label="Edge 2")
+
+R1_by_t_ds = (R1/42)[0:-1:2]
+R2_by_t_ds = (R2/44)[0:-1:2]
+
+# for i, j in enumerate(theta1[0:-1:2]):
+#     plt.plot([j * 180 / np.pi, j * 180 / np.pi], [R1_ds[i], R2_ds[i]], color='k', alpha=.2, zorder=0)
+plt.xlabel("θ")
+plt.ylabel("R/t")
+plt.legend()
+
+# %%
+# more rescaled
+plt.plot(theta1 * 180 / np.pi, R1/42, label="Edge 1")
+plt.plot(theta1 * 180 / np.pi, R2/44, label="Edge 2")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[2, :]/46, label="Edge 3")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[3, :]/48, label="Edge 4")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[4, :]/50, label="Edge 5")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[5, :]/52, label="Edge 6")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[6, :]/54, label="Edge 7")
+plt.plot(theta1 * 180 / np.pi, r_vals_s31[7, :]/56, label="Edge 8")
+
+
+# for i, j in enumerate(theta1[0:-1:2]):
+#     plt.plot([j * 180 / np.pi, j * 180 / np.pi], [R1_ds[i], R2_ds[i]], color='k', alpha=.2, zorder=0)
+plt.xlabel("θ")
+plt.ylabel("R/t")
+plt.legend()
+
+# %% [markdown]
+# Square root?
+
+# %%
+plt.plot(theta1 * 180 / np.pi, R1/np.sqrt(42), label="Edge 1")
+plt.plot(theta1 * 180 / np.pi, R2/np.sqrt(44), label="Edge 2")
+
+plt.xlabel("θ")
+plt.ylabel(r"R/ \sqrt t")
+plt.legend()
+
+# %% [markdown]
+# Make full rescaled polar plots and Cartesian plots with $t$ and $\sqrt{t}$
+
+# %%
+fig = plt.figure(figsize=(12, 6))
+ax1 = plt.subplot(121)
+ax2 = plt.subplot(122, projection='polar')
+
+sampleTimeIdx = [0, 2, 4, 8, 12, 20, 40, 50, 60, 66, 69]
+sampleTimesToPlot = actualTimes[20:][sampleTimeIdx]
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+theta = np.linspace(-32, 107, 200)
+
+for i, j in enumerate(sampleTimeIdx):
+    ax1.plot(theta, r_vals_s31[j, :]/sampleTimesToPlot[i], color=next(color), label=fr"$u(t_{{{sampleTimesToPlot[i]}}})$")
+
+ax1.set_xlabel(r"$θ (deg)$")
+ax1.set_ylabel(r"$r_{edge} / t$")
+ax1.set_xlim(-32, 107)
+# ax1.set_ylim(4.05, 24)
+ax1.legend(loc=(1.05, .05))
+ax1.set_title("Sim 031 Rescaled by t")
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+
+for i, j in enumerate(sampleTimeIdx):
+    ax2.plot(theta * np.pi/180, r_vals_s31[j, :]/sampleTimesToPlot[i], color=next(color), label=fr"$u(t_{{{sampleTimesToPlot[i]}}})$")
+
+ax2.tick_params(axis='both', which='major', labelsize=10)
+# ax2.set_rmax(24)
+ax2.grid(True)
+
+
+fig.tight_layout()
+
+# %%
+fig = plt.figure(figsize=(12, 6))
+ax1 = plt.subplot(121)
+ax2 = plt.subplot(122, projection='polar')
+
+sampleTimeIdx = [0, 2, 4, 8, 12, 20, 40, 50, 60, 66, 69]
+sampleTimesToPlot = actualTimes[20:][sampleTimeIdx]
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+theta = np.linspace(-32, 107, 200)
+
+for i, j in enumerate(sampleTimeIdx):
+    ax1.plot(theta, r_vals_s51[j, :]/sampleTimesToPlot[i], color=next(color), label=fr"$u(t_{{{sampleTimesToPlot[i]}}})$")
+
+ax1.set_xlabel(r"$θ (deg)$")
+ax1.set_ylabel(r"$r_{edge} / t$")
+ax1.set_xlim(-32, 107)
+# ax1.set_ylim(4.05, 24)
+ax1.legend(loc=(1.05, .05))
+ax1.set_title("Sim 051 Rescaled by t")
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+
+for i, j in enumerate(sampleTimeIdx):
+    ax2.plot(theta * np.pi/180, r_vals_s51[j, :]/sampleTimesToPlot[i], color=next(color), label=fr"$u(t_{{{sampleTimesToPlot[i]}}})$")
+
+ax2.tick_params(axis='both', which='major', labelsize=10)
+# ax2.set_rmax(24)
+ax2.grid(True)
+
+
+fig.tight_layout()
+
+# %%
+fig = plt.figure(figsize=(12, 6))
+ax1 = plt.subplot(121)
+ax2 = plt.subplot(122, projection='polar')
+
+sampleTimeIdx = [0, 2, 4, 8, 12, 20, 40, 50, 60, 66, 69]
+sampleTimesToPlot = actualTimes[20:][sampleTimeIdx]
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+theta = np.linspace(-32, 107, 200)
+
+for i, j in enumerate(sampleTimeIdx):
+    ax1.plot(theta, r_vals_s31[j, :]/np.sqrt(sampleTimesToPlot[i]), color=next(color), label=fr"$u(t_{{{sampleTimesToPlot[i]}}})$")
+
+ax1.set_xlabel(r"$θ (deg)$")
+ax1.set_ylabel(r"$r_{edge} / sqrt t$")
+ax1.set_xlim(-32, 107)
+# ax1.set_ylim(4.05, 24)
+ax1.legend(loc=(1.05, .05))
+ax1.set_title("Sim 031 Rescaled by sqrt t")
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+
+for i, j in enumerate(sampleTimeIdx):
+    ax2.plot(theta * np.pi/180, r_vals_s31[j, :]/np.sqrt(sampleTimesToPlot[i]), color=next(color), label=fr"$u(t_{{{sampleTimesToPlot[i]}}})$")
+
+ax2.tick_params(axis='both', which='major', labelsize=10)
+# ax2.set_rmax(24)
+ax2.grid(True)
+
+
+fig.tight_layout()
+
+# %%
+fig = plt.figure(figsize=(12, 6))
+ax1 = plt.subplot(121)
+ax2 = plt.subplot(122, projection='polar')
+
+sampleTimeIdx = [0, 2, 4, 8, 12, 20, 40, 50, 60, 66, 69]
+sampleTimesToPlot = actualTimes[20:][sampleTimeIdx]
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+theta = np.linspace(-32, 107, 200)
+
+for i, j in enumerate(sampleTimeIdx):
+    ax1.plot(theta, r_vals_s51[j, :]/np.sqrt(sampleTimesToPlot[i]), color=next(color), label=fr"$u(t_{{{sampleTimesToPlot[i]}}})$")
+
+ax1.set_xlabel(r"$θ (deg)$")
+ax1.set_ylabel(r"$r_{edge} / sqrt t$")
+ax1.set_xlim(-32, 107)
+# ax1.set_ylim(4.05, 24)
+ax1.legend(loc=(1.05, .05))
+ax1.set_title("Sim 031 Rescaled by sqrt t")
+
+color = iter(plt.cm.viridis(np.linspace(0, 1, len(sampleTimesToPlot))))
+
+
+for i, j in enumerate(sampleTimeIdx):
+    ax2.plot(theta * np.pi/180, r_vals_s51[j, :]/np.sqrt(sampleTimesToPlot[i]), color=next(color), label=fr"$u(t_{{{sampleTimesToPlot[i]}}})$")
+
+ax2.tick_params(axis='both', which='major', labelsize=10)
+# ax2.set_rmax(24)
+ax2.grid(True)
+
+
+fig.tight_layout()
 
 # %% [markdown]
 # **Proper Orthogonal Decomposition**?
 
+# %% [markdown]
+# Simple comparison. Take 1 sim, get SVD basis, Take 2 sims, get SVD basis. Now repeat, but with rescaled sims! What kind of bases do we get? My hunch is that different points may not map to the same $\theta$ values?
+
 # %%
+basis_s31 = opinf.pre.PODBasis().fit(r_vals_s31.T, residual_energy=1e-8)
+print(basis_s31)
+
+# Check the decay of the singular values.
+basis_s31.plot_svdval_decay()
+plt.xlim(0, 25)
+
+# %%
+basis_s51 = opinf.pre.PODBasis().fit(r_vals_s51.T, residual_energy=1e-8)
+print(basis_s51)
+
+# Check the decay of the singular values.
+basis_s51.plot_svdval_decay()
+plt.xlim(0, 25)
+
+# %%
+truncatedTimes = np.arange(42, 182, 2)
+truncatedTimes
+
+# %%
+r_s31_rescaled = np.zeros(r_vals_s31.shape)
+r_s51_rescaled = np.zeros(r_vals_s51.shape)
+
+for i in range(r_vals_s31.shape[0]):
+    r_s31_rescaled[i, :] = r_vals_s31[i, :]/truncatedTimes[i]
+    r_s51_rescaled[i, :] = r_vals_s51[i, :]/truncatedTimes[i]
+
+# %%
+basis_s31_rescaled = opinf.pre.PODBasis().fit(r_s31_rescaled.T, residual_energy=1e-8)
+print(basis_s31_rescaled)
+
+# Check the decay of the singular values.
+basis_s31_rescaled.plot_svdval_decay()
+plt.xlim(0, 25)
+
+# %%
+basis_s51_rescaled = opinf.pre.PODBasis().fit(r_s51_rescaled.T, residual_energy=1e-8)
+print(basis_s51_rescaled)
+
+# Check the decay of the singular values.
+basis_s51_rescaled.plot_svdval_decay()
+plt.xlim(0, 25)
+
+# %% [markdown]
+# Match points having similar $r/t$ values.
+
+# %%
+from tslearn.metrics import dtw_path
+
+# %%
+path, _ = dtw_path(R1[0:-1:2]/42, R2[0:-1:2]/44)
+
+# %%
+plt.plot(theta1 * 180 / np.pi, R1/42, label="Edge 1", zorder=1)
+plt.plot(theta1 * 180 / np.pi, (R2/44) + 0.1, label="Edge 2", zorder=1)
+
+R1_by_t_ds = (R1/42)[0:-1:2]
+R2_by_t_ds = (R2/44 + 0.1)[0:-1:2]
+
+theta1_ds = theta1[0:-1:2]
+
+for idx, (i, j) in enumerate(path):
+    plt.plot([theta1_ds[i] * 180/np.pi, theta1_ds[j] * 180 / np.pi], [R1_by_t_ds[i], R2_by_t_ds[j]], color='k', alpha=.2, zorder=0)
+
+plt.title("Dynamic Time Warping")
 
 # %%
 
 # %%
+path
 
 # %% [markdown]
 # SOpInf style, we could shift and scale first, but then the drawback is that the shift learning process is not explicitly parametrized? Maybe then the shifting problem could just be treated separately, i.e.
