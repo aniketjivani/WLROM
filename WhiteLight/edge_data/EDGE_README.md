@@ -8,6 +8,9 @@ Original source files are located at:
 Added one more file from manually running image processing scripts supplied by Hongfan
 `CR2154_obs_stacked_edge.npy`: this contains the observation edge data for CR2154.
 
+Update: Jul 30, 2023
+Added "blobfree" data: "CR2161_stacked_edge_blobfree.npy" - improves edge detection process so slower and fainter CMEs are picked up correctly by algorithm and monotonicity is maintained correctly.
+
 
 it should be a 90(90 time point) by angle by number of successfulRuns matrix
 
