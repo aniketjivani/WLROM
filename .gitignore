@@ -1,5 +1,14 @@
 WhiteLight/.ipynb_checkpoints
 HeatEquation/.ipynb_checkpoints
+EdgeSS/.ipynb_checkpoints
+EdgeSS/__pycache__
+EdgeSS/.pt_tmp
+EdgeSS/saved_models
+EdgeSS/edges_blobfree
+EdgeSS/edges_blobfree_varying_theta
+EdgeSS/curve_fit_params
+EdgeSS/train_2models_comparison
+EdgeSS/*.pt
 CR2161_tDecay2h_Polar_Compressed.npy
 WhiteLight/edge_img.zip
 WhiteLight/edge_img
