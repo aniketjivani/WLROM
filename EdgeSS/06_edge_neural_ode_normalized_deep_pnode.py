@@ -20,8 +20,12 @@
 # 96778 - all sims but too slow, 10 batch time, 6 batch size, 7 sims per batch, 60 epochs, 500 iters
 #
 # 73102 - reduce niters per epoch and reduce sims per batch to aggregate as well as batch time, since integration to final time step can be slower for adaptive solver. 3 sims per batch and 60 epochs, 150 iters per epoch.
-#
-# Next - 150 epochs at least, split into train test and calibration set. 250 iters. 4 sims per batch, one more layer in the network.
+
+# 39492 - 150 epochs at least, split into train test and calibration set. 200 iters. 4 sims per batch, one more layer in the network, 70 hidden units, very coarse representation for position angles, coarsened by factor of 4.
+
+# 11250 - 2 sims again, but 2000 iters. Move to script, run after submitting job script.
+
+# 84039 - 2 sims again, but only 2 param dims (BStrength and iHelicity) instead of 10 again unsuccessful!!
 
 # %%
 import torch
@@ -49,16 +53,16 @@ parser = argparse.ArgumentParser('PNODE')
 # parser.add_argument('-n',  type=int, default=1, help="Size of the dataset")
 # parser.add_argument('-n',  type=int, default=100, help="Size of the dataset")
 
-parser.add_argument('--niters', type=int, default=200)
+parser.add_argument('--niters', type=int, default=2000)
 parser.add_argument('--lr',  type=float, default=1e-3, help="Starting learning rate.")
 parser.add_argument('-bs', '--batch-size', type=int, default=4)
 parser.add_argument('-bt', '--batch-time', type=int, default=5)
-parser.add_argument('-nspb', '--nsims_per_batch', type=int, default=4)
-parser.add_argument('-epch', '--nepochs', type=int, default=250)
+parser.add_argument('-nspb', '--nsims_per_batch', type=int, default=2)
+parser.add_argument('-epch', '--nepochs', type=int, default=1)
 
 
 parser.add_argument('--save', type=str, default='experiments/', help="Path for save checkpoints")
-parser.add_argument('--load', type=str, default=39492, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
+parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('-r', '--random-seed', type=int, default=1123, help="Random_seed")
 
 
@@ -75,6 +79,11 @@ parser.add_argument('-u', '--units',
                     default=70, 
                     help="Number of units per layer in ODE func")
 
+parser.add_argument('--nParamsToUse',
+                    type=int,
+                    default=2,
+                    help="Number of CME params to use")
+
 # parser.add_argument('--normalize', type=bool, default=True)
 
 parser.add_argument('-ds',
@@ -82,7 +91,8 @@ parser.add_argument('-ds',
                     default=4,
                     help="Coarsening factor for position angles")
 
-args = parser.parse_args(args=())
+# args = parser.parse_args(args=())
+args = parser.parse_args()
 
 # %%
 vars(args)
@@ -246,6 +256,7 @@ orig_sd_track_idx
 # %%
 orig_sd_train_idx = np.array([np.where(sd_2161 == i)[0][0] for i in sd_train])
 orig_sd_test_idx = np.array([np.where(sd_2161 == i)[0][0] for i in sd_test])
+orig_sd_calib_idx = np.array([np.where(sd_2161 == i)[0][0] for i in sd_calib])
 
 # %%
 y_train = rd_2161[:, :, orig_sd_train_idx]
@@ -274,6 +285,10 @@ yMaxTrain = []
 tMinTest = []
 tMaxTest = []
 dtTest = []
+
+tMinCalib = []
+tMaxCalib = []
+dtCalib = []
 
 for sidx in orig_sd_train_idx:
     
@@ -312,7 +327,24 @@ for sidx in orig_sd_test_idx:
     tAllScaled = (np.arange(tMin, tMax + 2, step=2) - tMin) / (tMax - tMin)
     
     dtTest.append(tAllScaled[1] - tAllScaled[0])
+    
+    
+    
+for sidx in orig_sd_calib_idx:    
+    r_sim = rd_2161[:, :, sidx]
+    
+    tMinIdx, tMin, tMaxIdx, tMax = edut.getTMinTMax(ed_2161, simIdx = sidx)
 
+    r_sim_valid = r_sim[tMinIdx:(tMaxIdx + 1), :]
+    
+    tMinCalib.append(tMin)
+    tMaxCalib.append(tMax)
+        
+    tAllScaled = (np.arange(tMin, tMax + 2, step=2) - tMin) / (tMax - tMin)
+    
+    dtCalib.append(tAllScaled[1] - tAllScaled[0])
+    
+    
 # %%
 # plot dt for train
 plt.plot(dtTrain, marker='o')
@@ -393,18 +425,26 @@ cme_params_norm
 cme_params_to_augment = cme_params_norm.to_numpy()
 cme_params_to_augment.shape
 
+
 # %%
 cme_params_to_augment_final = np.zeros((cme_params_to_augment.shape[0],
                                        cme_params_to_augment.shape[1] + 1))
 cme_params_to_augment_final[:, :(cme_params_to_augment.shape[1])] = cme_params_to_augment
 
+if args.nParamsToUse == 2:
+    param_dim = args.nParamsToUse
+else:
+    param_dim = cme_params_to_augment_final.shape[1]
+
 
 cme_params_to_augment_final[orig_sd_train_idx, cme_params_to_augment.shape[1]] = dtTrain
 cme_params_to_augment_final[orig_sd_test_idx, cme_params_to_augment.shape[1]] = dtTest
+cme_params_to_augment_final[orig_sd_calib_idx, cme_params_to_augment.shape[1]] = dtCalib
+
 
 # %%
-param_dim = cme_params_to_augment_final.shape[1]
-param_dim
+# param_dim = cme_params_to_augment_final.shape[1]
+
 
 # %%
 input_dim = rd_2161.shape[1]
@@ -416,7 +456,10 @@ augmented_r[:, :input_dim, orig_sd_train_idx] = y_train_normalized
 augmented_r[:, :input_dim, orig_sd_test_idx] = y_test_normalized
 augmented_r[:, :input_dim, orig_sd_calib_idx] = y_calib_normalized
 for iii in range(rd_2161.shape[2]):
-    augmented_r[:, (input_dim):, iii] = cme_params_to_augment_final[iii, :]
+    if args.nParamsToUse == 2:
+        augmented_r[:, (input_dim):(input_dim + args.nParamsToUse), iii] = cme_params_to_augment_final[iii, [0, 4]]
+    else:
+        augmented_r[:, (input_dim):, iii] = cme_params_to_augment_final[iii, :]
 
 # %%
 aug_y_train = augmented_r[:, :, orig_sd_train_idx]
@@ -501,6 +544,11 @@ logger.info("Test Idx")
 logger.info(sd_test)
 logger.info("Checkpoint Path")
 logger.info(ckpt_path)
+logger.info("Input Dim: ")
+logger.info(input_dim)
+logger.info("Param Dim: ")
+logger.info(param_dim)
+logger.info(device)
 
 
 # %%
@@ -787,9 +835,9 @@ for i in sim_ids_to_track:
 
 if args.load is not None:
     edut.get_ckpt_model(ckpt_path, model, device)
-# else:
-    # for ep in range(1, args.nepochs + 1):
-    for ep in range(177, args.nepochs + 1): # start from 1 normally, here we are warmstarting from checkpoint
+else:
+    for ep in range(1, args.nepochs + 1):
+    # for ep in range(177, args.nepochs + 1): # start from 1 normally, here we are warmstarting from checkpoint
         sim_ids_to_train = np.sort(rng.choice(sim_ids_all, args.nsims_per_batch, replace=False))
         tt = []
         ytt = []
@@ -881,34 +929,42 @@ if args.load is not None:
                     }, ckpt_path)
 
 # %%
-with torch.no_grad():
 
-    # yMinTrainAll, yMaxTrainAll
+
+
+
+
+
+
+# # %%
+# with torch.no_grad():
+
+#     # yMinTrainAll, yMaxTrainAll
     
-    sim_ids_all_test = np.array([i for i in range(len(orig_sd_test_idx))])
+#     sim_ids_all_test = np.array([i for i in range(len(orig_sd_test_idx))])
     
-    for sim_id in sim_ids_all_test:
+#     for sim_id in sim_ids_all_test:
     
-        _, tt_data, ytt_data = get_data_for_sim(orig_sd_test_idx[sim_id], device=device)
+#         _, tt_data, ytt_data = get_data_for_sim(orig_sd_test_idx[sim_id], device=device)
     
-        pred_y_test = torch.squeeze(odeint(model,
-                                        ytt_data[[0], :],
-                                        tt_data)) * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll
+#         pred_y_test = torch.squeeze(odeint(model,
+#                                         ytt_data[[0], :],
+#                                         tt_data)) * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll
     
 
-        print(sim_id)
+#         print(sim_id)
 
-        tMinIdx, tMin, tMaxIdx, tMax = edut.getTMinTMax(ed_2161, simIdx = orig_sd_test_idx[sim_id])
-        r_true = augmented_r[tMinIdx:(tMaxIdx + 1), :input_dim, orig_sd_test_idx[sim_id]] * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll
+#         tMinIdx, tMin, tMaxIdx, tMax = edut.getTMinTMax(ed_2161, simIdx = orig_sd_test_idx[sim_id])
+#         r_true = augmented_r[tMinIdx:(tMaxIdx + 1), :input_dim, orig_sd_test_idx[sim_id]] * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll
 
-        edut.plotTrainPredData1Model(r_true,
-                                     pred_y_test.cpu()[:, :input_dim],
-                                     ed_2161,
-                                     sd_2161,
-                                     theta=theta_grid,
-                                     simIdx=orig_sd_test_idx[sim_id],
-                                     savefig=True,
-                                     savedir="./test_sim_figs_global_NODE")
+#         edut.plotTrainPredData1Model(r_true,
+#                                      pred_y_test.cpu()[:, :input_dim],
+#                                      ed_2161,
+#                                      sd_2161,
+#                                      theta=theta_grid,
+#                                      simIdx=orig_sd_test_idx[sim_id],
+#                                      savefig=True,
+#                                      savedir="./test_sim_figs_global_NODE")
 
 # %%
 
@@ -926,75 +982,46 @@ with torch.no_grad():
 
 # %%
 
-# %%
 
-# %%
+# # %% [markdown]
+# # **Conformalized Predictions**
 
-# %%
+# # %%
+# orig_sd_calib_idx = np.array([np.where(sd_2161 == i)[0][0] for i in sd_calib])
 
-# %%
+# scores = []
 
-# %%
+# with torch.no_grad():
 
-# %%
-
-# %%
-
-# %%
-
-# %%
-
-# %%
-
-# %%
-
-# %%
-
-# %%
-
-# %%
-
-# %%
-
-# %% [markdown]
-# **Conformalized Predictions**
-
-# %%
-orig_sd_calib_idx = np.array([np.where(sd_2161 == i)[0][0] for i in sd_calib])
-
-scores = []
-
-with torch.no_grad():
-
-    # yMinTrainAll, yMaxTrainAll
+#     # yMinTrainAll, yMaxTrainAll
     
-    sim_ids_all_calib = np.array([i for i in range(len(orig_sd_calib_idx))])
+#     sim_ids_all_calib = np.array([i for i in range(len(orig_sd_calib_idx))])
     
-    for sim_id in sim_ids_all_calib:
+#     for sim_id in sim_ids_all_calib:
     
-        _, tt_data, ytt_data = get_data_for_sim(orig_sd_calib_idx[sim_id], device=device)
+#         _, tt_data, ytt_data = get_data_for_sim(orig_sd_calib_idx[sim_id], device=device)
     
-        pred_y_calib = torch.squeeze(odeint(model,
-                                        ytt_data[[0], :],
-                                        tt_data)) * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll
+#         pred_y_calib = torch.squeeze(odeint(model,
+#                                         ytt_data[[0], :],
+#                                         tt_data)) * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll
     
-        scores.append(torch.mean(torch.abs(pred_y_calib - (ytt_data * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll))).item())
-        print(sim_id)
+#         scores.append(torch.mean(torch.abs(pred_y_calib - (ytt_data * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll))).item())
+#         print(sim_id)
 
-        # tMinIdx, tMin, tMaxIdx, tMax = edut.getTMinTMax(ed_2161, simIdx = orig_sd_test_idx[sim_id])
-        # r_true = augmented_r[tMinIdx:(tMaxIdx + 1), :input_dim, orig_sd_test_idx[sim_id]] * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll
+#         # tMinIdx, tMin, tMaxIdx, tMax = edut.getTMinTMax(ed_2161, simIdx = orig_sd_test_idx[sim_id])
+#         # r_true = augmented_r[tMinIdx:(tMaxIdx + 1), :input_dim, orig_sd_test_idx[sim_id]] * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll
 
-# %%
-scores
+# # %%
+# scores
 
-# %%
-alpha_cov = 0.9
-scores_quant = np.quantile(scores, q=alpha_cov)
+# # %%
+# alpha_cov = 0.9
+# scores_quant = np.quantile(scores, q=alpha_cov)
 
-# %%
-scores_quant
+# # %%
+# scores_quant
 
-# %%
-# calculate intervals on test images.
+# # %%
+# # calculate intervals on test images.
 
-# %%
+# # %%
