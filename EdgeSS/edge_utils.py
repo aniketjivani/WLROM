@@ -4,6 +4,18 @@ import matplotlib.pyplot as plt
 import re
 import os
 
+import logging
+import pickle
+
+import torch
+import torch.nn as nn
+
+import pandas as pd
+import math 
+import glob
+
+import datetime
+
 plt.rc("axes.spines", right=True, top=True)
 plt.rc("figure", dpi=300, 
        figsize=(9, 3)
@@ -26,8 +38,8 @@ def load_edge_data_blobfree(eventID):
     return edge_data, np.array(all_sims)
 
 
-def Polar_to_Cartesian(edge, start_angle, end_angle, height, width, circles_disk, circles_scope):
-    theta = np.arange(0, 2 * np.pi, 2 * np.pi / width)[start_angle:end_angle]
+def Polar_to_Cartesian(edge, start_angle, end_angle, height, width, circles_disk, circles_scope, sample_freq=2):
+    theta = np.arange(0, 2 * np.pi, 2 * np.pi / width)[start_angle:end_angle:sample_freq]
     # Coordinates of disk and telescope center
     circle_x = circles_disk[0]
     circle_y = circles_disk[1]
@@ -43,7 +55,7 @@ def Polar_to_Cartesian(edge, start_angle, end_angle, height, width, circles_disk
     Y = Yp + ( Yi - Yp ) * r
     return (X,Y)
 
-def getRValues(edge_data_matrix, simIdx=0, minStartIdx=0):
+def getRValues(edge_data_matrix, simIdx=0, minStartIdx=0, sample_freq=2):
     
     edges_sim = edge_data_matrix[minStartIdx:, :, simIdx]
     
@@ -59,7 +71,8 @@ def getRValues(edge_data_matrix, simIdx=0, minStartIdx=0):
                    height=128, 
                    width=512, 
                    circles_disk=(149,149,19), 
-                   circles_scope=(149,149,110))
+                   circles_scope=(149,149,110),
+                   sample_freq=sample_freq)
         
         xi_norm, yi_norm = 64 * (xi/300) - 32, 64 * (yi/300) - 32
         theta_vals[i, :] = np.arctan2(yi_norm, xi_norm)
@@ -311,3 +324,125 @@ def plotTrainPredData1Model(r_train, r_pred1, edge_data_matrix, sim_data, theta=
                    bbox_inches="tight", pad_inches=0)
         print("Saved image for Sim {:03d}".format(simID))
         plt.close()
+        
+        
+def plotTrainPredData1ModelFixedInterval(r_train, r_pred1, edge_data_matrix, sim_data, theta=np.linspace(-31, 82, 160), simIdx=0,
+                            intWidth=None,
+                            savefig=False,
+                            savedir="./train_1model_comparison"):
+    
+    
+    """
+    Model and True data comparison polar plot, but also including the fixed interval width from conformal prediction for each of the predicted times. Set a small transparency value.
+    """
+    # get Sim ID
+    simID = sim_data[simIdx]
+    
+    # get minimum and max bounds (i.e. where edge appears and where edge is very close to boundary)
+    tMinIdx, tMin, tMaxIdx, tMax = getTMinTMax(edge_data_matrix, simIdx=simIdx)
+
+    all_times = np.linspace(2, 180, 90)
+
+    #     # filter based on tMinIdx and tMaxIdx
+    valid_times = all_times[tMinIdx:(tMaxIdx + 1)]
+
+    valid_times_to_plot = np.arange(tMin, tMax + 2, step=12)
+
+    valid_time_idx = np.array([np.where(valid_times == i)[0][0] for i in valid_times_to_plot])
+    
+    #     return valid_time_idx
+    fig = plt.figure(figsize=(12, 6))
+    ax1 = plt.subplot(121, projection='polar')
+
+    color = iter(plt.cm.jet(np.linspace(0, 1, len(valid_times_to_plot))))
+
+    for i, j in enumerate(valid_time_idx):
+        cc = next(color)
+        ax1.plot(theta * np.pi/180, r_train[j, :], color=cc, label=fr"$u(t_{{{int(valid_times_to_plot[i])}}})$")
+        ax1.plot(theta * np.pi/180, r_pred1[j, :], color=cc, linestyle='dashed', label="")
+        ax1.fill_between(theta * np.pi/180, r_pred1[j, :] - intWidth, r_pred1[j, :] + intWidth, facecolor=cc, alpha=0.2, label="")
+
+
+    
+    ax1.set_rlabel_position(120)
+    ax1.tick_params(axis='both', which='major', labelsize=10)
+    ax1.set_rmax(24)
+    ax1.grid(True)
+
+    ax1.legend(loc=(1.05, 0.05))
+    
+    ax1.set_title("Training and Predictions Sim {}".format(simID))
+        
+    fig.tight_layout()
+   
+    if savefig:
+        plt.savefig(os.path.join(savedir, "run_{:03d}.png".format(simID)),
+                   bbox_inches="tight", pad_inches=0)
+        print("Saved image for Sim {:03d}".format(simID))
+        plt.close()
+        
+
+## Copying over some functions from the PNODE repo!!
+
+def update_learning_rate(optimizer, decay_rate = 0.999, lowest = 1e-3):
+	for param_group in optimizer.param_groups:
+		lr = param_group['lr']
+		lr = max(lr * decay_rate, lowest)
+		param_group['lr'] = lr
+        
+        
+def makedirs(dirname):
+	if not os.path.exists(dirname):
+		os.makedirs(dirname)
+        
+def save_checkpoint(state, save, epoch):
+	if not os.path.exists(save):
+		os.makedirs(save)
+	filename = os.path.join(save, 'checkpt-%04d.pth' % epoch)
+	torch.save(state, filename)
+    
+    
+def init_network_weights(net, std = 0.1):
+	for m in net.modules():
+		if isinstance(m, nn.Linear):
+			nn.init.normal_(m.weight, mean=0, std=std)
+			nn.init.constant_(m.bias, val=0)
+
+def init_network_weights_xavier_normal(net):
+	for m in net.modules():
+		if isinstance(m, nn.Conv1d) or isinstance(m, nn.Linear):
+			nn.init.xavier_normal_(m.weight)
+			nn.init.constant_(m.bias, val=0)
+            
+            
+def get_ckpt_model(ckpt_path, model, device):
+	if not os.path.exists(ckpt_path):
+		raise Exception("Checkpoint " + ckpt_path + " does not exist.")
+	# Load checkpoint.
+	checkpt = torch.load(ckpt_path)
+	ckpt_args = checkpt['args']
+	state_dict = checkpt['state_dict']
+	model_dict = model.state_dict()
+
+	# 1. filter out unnecessary keys
+	state_dict = {k: v for k, v in state_dict.items() if k in model_dict}
+	# 2. overwrite entries in the existing state dict
+	model_dict.update(state_dict) 
+	# 3. load the new state dict
+	model.load_state_dict(state_dict)
+	model.to(device)
+    
+def create_net(n_inputs, n_outputs, n_layers = 1, 
+	n_units = 100, nonlinear = nn.Tanh):
+	layers = [nn.Linear(n_inputs, n_units)]
+	for i in range(n_layers-1):
+		layers.append(nonlinear())
+		layers.append(nn.Linear(n_units, n_units))
+
+	layers.append(nonlinear())
+	layers.append(nn.Linear(n_units, n_outputs))
+	return nn.Sequential(*layers)
+
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
