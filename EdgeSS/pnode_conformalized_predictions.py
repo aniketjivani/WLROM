@@ -617,7 +617,7 @@ elif args.cp_proc == "perturbed_adaptive":
                 pred_y_calib_all_np[:, :, i] = pred_y_calib_all[i]
 
             # compute std for each timestep across all ensemble members.
-            std_y_calib_all_np = np.std(pred_y_calib_all_np, axis=2)
+            std_y_calib_all_np = np.std(pred_y_calib_all_np[:, :input_dim, :], axis=2)
 
             print(std_y_calib_all_np.shape)
 
@@ -678,7 +678,7 @@ elif args.cp_proc == "perturbed_adaptive":
 
 
             # compute std for each timestep across all ensemble members.
-            std_y_test_all_np = np.std(pred_y_test_all_np, axis=2)
+            std_y_test_all_np = np.std(pred_y_test_all_np[:, :input_dim, :], axis=2)
 
             print(std_y_test_all_np.shape)
 
