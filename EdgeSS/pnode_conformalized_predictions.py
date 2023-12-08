@@ -72,6 +72,7 @@ parser.add_argument('--alpha-cov',
 parser.add_argument('--cp-proc',
                     type=str,
                     default="perturbed_adaptive",
+                    # default="fixed",
                     help="Conformal procedure to be used. Options: fixed - this computes a single value across all test points based on errors used as calibration scores, perturbed_adaptive: this generates a small ensemble to estimate variance of predictive model and uses individual variances multiplied by scores to generate slightly adaptive intervals.")
 
 args = parser.parse_args(args=()) # for running in interactive window
@@ -487,7 +488,7 @@ if args.cp_proc == "fixed":
                                          simIdx=orig_sd_test_idx[sim_id],
                                          intWidth=scores_quant,
                                          savefig=True,
-                                         savedir="./test_sim_figs_fixed_CP")
+                                         savedir="./test_sim_figs_fixed_CP_corrected")
 
 elif args.cp_proc == "perturbed_adaptive":
 
@@ -641,6 +642,7 @@ elif args.cp_proc == "perturbed_adaptive":
 
     # pred_test = []
     u_test = [] # record variance across all ensemble members separately.
+    residuals_test = [] # save residuals from nominal member to use for accuracy comparisons
 
     with torch.no_grad():
         sim_ids_all_test = np.array([i for i in range(len(orig_sd_test_idx))])
@@ -662,8 +664,8 @@ elif args.cp_proc == "perturbed_adaptive":
                 pred_y_test = torch.squeeze(odeint(model,
                                                 ytt_data_perturbed[[0], :],
                                                 tt_data)) * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll
-                # if memberIdx == 50: # get residual for mean prediction.
-                #     residuals.append(torch.mean(torch.abs(pred_y_calib - (ytt_data_perturbed * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll))).item())
+                if memberIdx == 50: # get residual for mean prediction.
+                    residuals_test.append(torch.mean(torch.abs(pred_y_test - (ytt_data_perturbed * (yMaxTrainAll - yMinTrainAll) + yMinTrainAll))).item())
                 # print(memberIdx)
                 pred_y_test_all.append(pred_y_test.cpu().numpy())
 
