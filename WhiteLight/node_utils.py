@@ -123,9 +123,12 @@ class ODENet(nn.Module):
     def __init__(self, 
                  latent_dim, 
                  param_dim,
+                 device,
                  n_layers=2,
                  n_units=50,
-                 nonlinear=nn.ELU):
+                 n_units_q=100,
+                 nonlinear=nn.ELU,
+                 quadratic=False):
     
         super(ODENet, self).__init__()
         layers = [nn.Linear(latent_dim + param_dim, n_units)]
@@ -135,20 +138,52 @@ class ODENet(nn.Module):
 
         layers.append(nonlinear())
         layers.append(nn.Linear(n_units, latent_dim))  
+
+        q_dim = latent_dim * (latent_dim + 1) // 2
+
+        layers_q = [nn.Linear(q_dim + param_dim, n_units_q)]
+        for i in range(n_layers - 1):
+            layers_q.append(nonlinear())
+            layers_q.append(nn.Linear(n_units_q, n_units_q))
+
+        layers_q.append(nonlinear())
+        layers_q.append(nn.Linear(n_units_q, latent_dim))
+
         odenet = nn.Sequential(*layers)
+        odenet_q = nn.Sequential(*layers_q)
 
         init_network_weights_xavier_normal(odenet)
 
         self.odenet = odenet
+        self.odenet_q = odenet_q
         self.latent_dim = latent_dim
-    
+        self.quadratic = quadratic
+        self.device = device
+
+    def quadratic_y(self, y):
+        # take lower triangular entries of outer product of y with itself.
+        y_np = torch.squeeze(y[:, :, :self.latent_dim], axis=0)
+        y_np_quad = torch.zeros((1, y_np.shape[0], int(y_np.shape[1] * (y_np.shape[1] + 1)/2)))
+        for i in range(y_np.shape[0]):
+            y_np_quad[0, i, :] = torch.outer(y_np[i, :], y_np[i, :])[np.tril_indices(y_np.shape[1])]
+
+        return torch.cat((torch.Tensor(y_np_quad).to(self.device), 
+                        torch.zeros_like(y[:, :, self.latent_dim:])),
+                        -1).to(self.device)
+
     def forward(self, t, y):
-        
-        output = torch.cat((self.odenet(y),
+        if self.quadratic==True:
+            output = torch.cat((self.odenet(y),
+                    torch.zeros_like(y[:, :, self.latent_dim:])), 
+                    -1) + torch.cat((self.odenet_q(self.quadratic_y(y)),
+                                     torch.zeros_like(y[:, :, self.latent_dim:])),
+                                     -1)
+        else:
+            output = torch.cat((self.odenet(y),
                     torch.zeros_like(y[:, :, self.latent_dim:])), 
                     -1)
-        
         return output
+
 
 class PNODE_Conv(nn.Module):
     def __init__(self, 
@@ -158,7 +193,8 @@ class PNODE_Conv(nn.Module):
                  device,
                  n_layers=2, 
                  n_units=50,
-                 nonlinear=nn.ELU):
+                 nonlinear=nn.ELU,
+                 quadratic=False):
         super(PNODE_Conv, self).__init__()
         
         encoder = nn.Sequential(nn.ZeroPad2d((7,8,7,8)),
@@ -202,8 +238,16 @@ class PNODE_Conv(nn.Module):
         self.encoder=encoder
         self.pnode=ODENet(latent_dim, 
                           param_dim,
+                          device,
                           n_layers=n_layers,
-                          n_units=n_units).to(device)
+                          n_units=n_units,
+                          quadratic=quadratic).to(device)
+        
+        if quadratic == True:
+            print("Using lin-quad PNODE")
+        else:
+            print("Using regular PNODE")
+
         self.decoder_mlp = decoder_mlp
         self.decoder_conv = decoder_conv
         
