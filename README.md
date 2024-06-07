@@ -17,3 +17,8 @@ NeuroDiffEq - https://github.com/NeuroDiffGym/neurodiffeq - need to see if we ca
 some analytical CFD examples in section 3 of this study? [RG Link](https://www.researchgate.net/publication/338867908_Artificial_Neutral_Networks_ANNs_Applied_as_CFD_Optimization_Techniques)
 
 torch metrics like MSE, absolute loss? some experiments: [Gist](https://gist.github.com/aniketjivani/231d63efee9308d8fc1fee7d1cd61bb6)
+
+Main code on ME-Maverick
+Uses virtual environment ptvenv
+From home directory, do `source ptvenv/bin/activate`
+And then launch Jupyter notebook from virtual env
