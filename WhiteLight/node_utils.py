@@ -331,3 +331,62 @@ class EarlyStopping:
                     self.path)
         # torch.save(model.state_dict(), self.path)
         self.val_loss_min = val_loss
+
+
+## Regularization functions for NODE (see https://github.com/cfinlay/ffjord-rnode) for details.
+def _get_minibatch_jacobian(y, x, create_graph=False):
+    """Computes the Jacobian of y wrt x assuming minibatch-mode.
+
+    Args:
+      y: (N, ...) with a total of D_y elements in ...
+      x: (N, ...) with a total of D_x elements in ...
+    Returns:
+      The minibatch Jacobian matrix of shape (N, D_y, D_x)
+    """
+    assert y.shape[0] == x.shape[0]
+    y = y.view(y.shape[0], -1)
+
+    # Compute Jacobian row by row.
+    jac = []
+    for j in range(y.shape[1]):
+        dy_j_dx = torch.autograd.grad(y[:, j], x, torch.ones_like(y[:, j]), retain_graph=True,
+                                      create_graph=True)[0].view(x.shape[0], -1)
+        jac.append(torch.unsqueeze(dy_j_dx, 1))
+    jac = torch.cat(jac, 1)
+    return jac
+
+def _batch_root_mean_squared(tensor):
+    tensor = tensor.view(tensor.shape[0], -1)
+    return torch.mean(torch.norm(tensor, p=2, dim=1) / tensor.shape[1]**0.5)
+
+def jacobian_frobenius_regularization_fn(x, dx):
+    jac = _get_minibatch_jacobian(dx, x)
+    # context.jac = jac
+    return _batch_root_mean_squared(jac)
+
+def l2_regularzation_fn(dx):
+    return _batch_root_mean_squared(dx)
+
+def autograd_trace(x_out, x_in, **kwargs):
+    """Standard brute-force means of obtaining trace of the Jacobian, O(d) calls to autograd"""
+    trJ = 0.
+    for i in range(x_in.shape[1]):
+        trJ += grad(x_out[:, i].sum(), x_in, allow_unused=False, create_graph=True)[0][:, i]
+    return trJ
+
+def hutch_trace(x_out, x_in, noise=None, **kwargs):
+    """Hutchinson's trace Jacobian estimator, O(1) call to autograd"""
+    jvp = grad(x_out, x_in, noise, create_graph=True)[0]
+    trJ = torch.einsum('bi,bi->b', jvp, noise)
+
+    return trJ
+
+def trace_df_dz(f, z):
+    """Calculates the trace of the Jacobian df/dz.
+    Stolen from: https://github.com/rtqichen/ffjord/blob/master/lib/layers/odefunc.py#L13
+    """
+    sum_diag = 0.
+    for i in range(z.shape[1]):
+        sum_diag += torch.autograd.grad(f[:, i].sum(), z, create_graph=True)[0].contiguous()[:, i].contiguous()
+
+    return sum_diag.contiguous()

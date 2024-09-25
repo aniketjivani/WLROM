@@ -22,7 +22,7 @@ plt.rc("figure", dpi=300,
       )
 plt.rc("font", family="serif")
 plt.rc("legend", edgecolor="none", frameon=True)
-plt.style.use("dark_background")
+# plt.style.use("dark_background")
 
 
 def load_edge_data_blobfree(eventID):
@@ -297,31 +297,33 @@ def plotTrainPredData1Model(r_train, r_pred1, edge_data_matrix, sim_data, theta=
     #     return valid_time_idx
     fig = plt.figure(figsize=(12, 6))
     ax1 = plt.subplot(121, projection='polar')
-
+    ax1.grid(linewidth=4.5)
+    ax1.yaxis.grid(linewidth=2.5)
+    
     color = iter(plt.cm.jet(np.linspace(0, 1, len(valid_times_to_plot))))
 
     
     for i, j in enumerate(valid_time_idx):
         cc = next(color)
-        ax1.plot(theta * np.pi/180, r_train[j, :], color=cc, label=fr"$u(t_{{{int(valid_times_to_plot[i])}}})$")
-        ax1.plot(theta * np.pi/180, r_pred1[j, :], color=cc, linestyle='dashed', label="")
+        ax1.plot(theta * np.pi/180, r_train[j, :], color=cc, label=fr"$t_{{{int(valid_times_to_plot[i])}}}$", linewidth=3.5)
+        ax1.plot(theta * np.pi/180, r_pred1[j, :], color=cc, linestyle='dashed', label="", linewidth=3.5)
 
 
     
     ax1.set_rlabel_position(120)
-    ax1.tick_params(axis='both', which='major', labelsize=10)
+    ax1.tick_params(axis='both', which='major', labelsize=22)
     ax1.set_rmax(24)
     ax1.grid(True)
 
-    ax1.legend(loc=(1.05, 0.05))
+    ax1.legend(loc=(1.05, 0.05), fontsize=15)
     
-    ax1.set_title("Training and Predictions Sim {}".format(simID))
+#     ax1.set_title("True Edge and Predictions Sim {}".format(simID))
         
     fig.tight_layout()
    
     if savefig:
         plt.savefig(os.path.join(savedir, "run_{:03d}.png".format(simID)),
-                   bbox_inches="tight", pad_inches=0)
+                   bbox_inches="tight", pad_inches=0, transparent=True)
         print("Saved image for Sim {:03d}".format(simID))
         plt.close()
         
@@ -353,25 +355,26 @@ def plotTrainPredData1ModelFixedInterval(r_train, r_pred1, edge_data_matrix, sim
     #     return valid_time_idx
     fig = plt.figure(figsize=(12, 6))
     ax1 = plt.subplot(121, projection='polar')
-
+    ax1.grid(linewidth=4.5)
+    ax1.yaxis.grid(linewidth=2.5)
     color = iter(plt.cm.jet(np.linspace(0, 1, len(valid_times_to_plot))))
 
     for i, j in enumerate(valid_time_idx):
         cc = next(color)
-        ax1.plot(theta * np.pi/180, r_train[j, :], color=cc, label=fr"$u(t_{{{int(valid_times_to_plot[i])}}})$")
-        ax1.plot(theta * np.pi/180, r_pred1[j, :], color=cc, linestyle='dashed', label="")
+        ax1.plot(theta * np.pi/180, r_train[j, :], color=cc, label=fr"$t_{{{int(valid_times_to_plot[i])}}}$", linewidth=2)
+        ax1.plot(theta * np.pi/180, r_pred1[j, :], color=cc, linestyle='dashed', label="", linewidth=2)
         ax1.fill_between(theta * np.pi/180, r_pred1[j, :] - intWidth, r_pred1[j, :] + intWidth, facecolor=cc, alpha=0.2, label="")
 
 
     
     ax1.set_rlabel_position(120)
-    ax1.tick_params(axis='both', which='major', labelsize=10)
+    ax1.tick_params(axis='both', which='major', labelsize=22)
     ax1.set_rmax(24)
     ax1.grid(True)
 
-    ax1.legend(loc=(1.05, 0.05))
+    ax1.legend(loc=(1.05, 0.05), fontsize=15)
     
-    ax1.set_title("Training and Predictions Sim {}".format(simID))
+#     ax1.set_title("Training and Predictions Sim {}".format(simID))
         
     fig.tight_layout()
    
