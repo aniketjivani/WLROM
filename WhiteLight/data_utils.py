@@ -72,10 +72,9 @@ def parse_datasets(raw_datafile, sim_datafile, param_datafile, args, device):
         val_idx = np.array([14, 15, 16, 21])
         test_idx = np.array([17, 22])
     elif args["test_mode"]=="t12v4p7":
-        train_idx = np.array([0, 2, 4, 6, 8, 10, 11, 12, 13, 18, 19, 20])
-        val_idx = np.array([5, 9, 16, 21])
-        test_idx = np.array([1, 3, 7, 14, 15, 17, 22])
-
+        train_idx = np.array([0, 1, 2, 3, 7, 10, 11, 12, 13, 18, 19, 22])
+        val_idx = np.array([4, 8, 14, 21])
+        test_idx = np.array([5, 6, 9, 15, 16, 17, 20])
     
     # Load and scale params
     train_params_raw = params[successful_sims[train_idx] - 1, :]/args["param_scaling"]
@@ -145,15 +144,20 @@ def parse_datasets(raw_datafile, sim_datafile, param_datafile, args, device):
     test_dataset = [(test_all[i:(i+1), :, :], tpredict) for i in range(test_all.shape[0])]
 
     # create dataloaders
+    bs = args["batch_size"] if args["batch_size"] < len(train_dataset) else len(train_dataset)
     train_dataloader = DataLoader(train_dataset, 
-                              batch_size = len(train_dataset), 
-                              shuffle=False,
+                                  batch_size=bs,
+                                #   batch_size=args["batch_size"],
+                            #   batch_size = len(train_dataset), 
+                              shuffle=True,
                             #   num_workers=1, 
                               collate_fn = lambda batch: collate_fn_wl(batch, input_dim, device))
     
 
     val_dataloader = DataLoader(val_dataset,
-                            batch_size = len(val_dataset),
+                            batch_size=bs,
+                            # batch_size=args["batch_size"],
+                            # batch_size = len(val_dataset),
                             shuffle=False,
                             # num_workers=1,
                             collate_fn = lambda batch: collate_fn_wl(batch, input_dim, device))

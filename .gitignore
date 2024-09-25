@@ -12,3 +12,6 @@ EdgeSS/*.pt
 CR2161_tDecay2h_Polar_Compressed.npy
 WhiteLight/edge_img.zip
 WhiteLight/edge_img
+WhiteLight/experiments
+WhiteLight/__pycache__
+HeatEquation/__pycache__

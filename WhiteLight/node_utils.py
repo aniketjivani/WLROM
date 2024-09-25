@@ -10,8 +10,8 @@ import sys
 def get_device() -> torch.device:
     return torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
-# def df_to_tensor(x: pd.DataFrame) -> torch:
-#     return torch.from_numpy(x.values).to(get_device())
+def df_to_tensor(x: pd.DataFrame) -> torch:
+    return torch.from_numpy(x.values).to(get_device())
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
